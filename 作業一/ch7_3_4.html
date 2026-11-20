@@ -52,6 +52,11 @@
       </div>
 
       <!-- Global Settings Bar -->
+      <a href="#actualResult"
+         class="px-3 py-2 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-semibold transition">
+        📸 作業截圖
+      </a>
+
       <div class="flex flex-wrap items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-2 text-xs">
         <div class="flex items-center gap-1.5">
           <span class="text-slate-400">資料庫：</span>
@@ -325,11 +330,113 @@
         </div>
       </section>
     </div>
+
+    <!-- 實際執行結果（SSMS 作業截圖） -->
+    <section id="actualResult" class="scroll-mt-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 px-5 sm:px-6 py-4 bg-gradient-to-r from-emerald-950/60 via-slate-900 to-cyan-950/40 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <span class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-lg shadow-lg shadow-emerald-500/20">📸</span>
+          <div>
+            <h2 class="font-bold text-white">實際執行結果 — 課本作業截圖</h2>
+            <p class="text-xs text-slate-400 font-mono">SSMS · 教務系統 → 資料表 → 班級 → 資料欄位</p>
+          </div>
+        </div>
+        <span class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">✅ 執行成功</span>
+      </div>
+
+      <div class="p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <!-- Screenshot -->
+        <div class="lg:col-span-7">
+          <figure class="rounded-xl bg-slate-950 border border-slate-800 overflow-hidden">
+            <img src="%E6%8C%87%E4%BB%A4%E7%B5%90%E6%9E%9C.png"
+                 alt="SSMS 截圖：班級資料表欄位結構，教授編號 nvarchar(4)、課程編號 nvarchar(5)、學號 nvarchar(4)、上課時間 datetime、教室 varchar(8)"
+                 class="w-full h-auto cursor-zoom-in hover:opacity-95 transition"
+                 onclick="openLightbox(this.src, this.alt)" />
+            <figcaption class="px-3.5 py-2.5 text-[11px] text-slate-400 border-t border-slate-800 bg-slate-900/60">
+              圖 1　SSMS 中【班級】資料表的欄位結構檢視畫面（點擊圖片可放大檢視）
+            </figcaption>
+          </figure>
+        </div>
+
+        <!-- Description -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="rounded-xl bg-slate-950 border border-slate-800 p-4">
+            <div class="text-[11px] font-bold text-emerald-300 mb-3">📋 截圖中的實際欄位定義</div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs font-mono text-left">
+                <thead class="text-slate-400 border-b border-slate-700">
+                  <tr>
+                    <th class="py-1.5 pr-3 font-normal">資料行名稱</th>
+                    <th class="py-1.5 pr-3 font-normal">資料型別</th>
+                    <th class="py-1.5 font-normal">允許 Null</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800 text-slate-200">
+                  <tr>
+                    <td class="py-1.5 pr-3 font-bold text-amber-300">教授編號</td>
+                    <td class="py-1.5 pr-3 text-emerald-300">nvarchar(4)</td>
+                    <td class="py-1.5 text-rose-300 font-bold">✕</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1.5 pr-3 font-bold text-fuchsia-300">課程編號</td>
+                    <td class="py-1.5 pr-3 text-emerald-300">nvarchar(5)</td>
+                    <td class="py-1.5 text-rose-300 font-bold">✕</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1.5 pr-3 font-bold text-sky-300">學號</td>
+                    <td class="py-1.5 pr-3 text-emerald-300">nvarchar(4)</td>
+                    <td class="py-1.5 text-rose-300 font-bold">✕</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1.5 pr-3 text-slate-300">上課時間</td>
+                    <td class="py-1.5 pr-3 text-slate-300">datetime</td>
+                    <td class="py-1.5 text-emerald-300 font-bold">✓</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1.5 pr-3 text-slate-300">教室</td>
+                    <td class="py-1.5 pr-3 text-amber-300">varchar(8)</td>
+                    <td class="py-1.5 text-emerald-300 font-bold">✓</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="rounded-xl bg-slate-950 border border-slate-800 p-4 text-xs text-slate-300 leading-relaxed space-y-2">
+            <div class="font-bold text-cyan-300">🔍 截圖佐證了什麼？</div>
+            <ul class="space-y-1.5 list-disc pl-4 text-slate-400">
+              <li><strong class="text-amber-300">教授編號 / 課程編號 / 學號</strong> 皆為 <code class="text-emerald-300">NOT NULL</code>，且同時掛有 🔑 金鑰（主鍵）與 🔗 鏈結（外鍵）圖示 → 驗證複合主鍵與 3 組外鍵綁定成功。</li>
+              <li>三個參照欄位型別為 <code class="text-emerald-300">nvarchar</code>，與父表【學生】【教授】【課程】的主鍵型別一致 → 外鍵才能成功建立。</li>
+              <li><strong class="text-sky-300">上課時間</strong> 與 <strong class="text-slate-300">教室</strong> 允許 Null → 對應課本建表中未加 <code>NOT NULL</code> 的普通欄位。</li>
+            </ul>
+          </div>
+
+          <div class="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-[11px] text-amber-200 leading-relaxed flex items-start gap-2">
+            <span>⚠️</span>
+            <span>截圖中 <code class="font-bold">教室</code> 的實際型別為 <code class="font-bold">varchar(8)</code>（課本原版），非 <code>nvarchar(8)</code>。因【教室】並未參與任何主鍵／外鍵綁定，故不影響本次作業的正確性。</span>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Toast Notification -->
   <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-2xl text-sm font-medium flex items-center gap-2">
     <span>✅</span><span id="toastMsg">已複製到剪貼簿！</span>
+  </div>
+
+  <!-- Lightbox for screenshot -->
+  <div id="lightbox" onclick="closeLightbox(event)"
+       class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-sm p-4 sm:p-8 overflow-auto">
+    <div class="min-h-full flex flex-col items-center justify-center gap-3">
+      <img id="lightboxImg" src="" alt=""
+           class="max-w-full max-h-[85vh] rounded-xl border border-slate-700 shadow-2xl" />
+      <p id="lightboxCaption" class="text-xs text-slate-400 font-mono text-center max-w-2xl"></p>
+      <button onclick="closeLightbox()"
+              class="mt-1 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono border border-slate-700 transition">
+        關閉 (Esc)
+      </button>
+    </div>
   </div>
 
   <script>
@@ -730,6 +837,11 @@ EXEC sp_help '班級';`;
             </div>
             <pre class="p-3.5 text-xs text-emerald-200 overflow-x-auto leading-relaxed"><code>${escapeHtml(sql)}</code></pre>
           </div>
+
+          <a href="#actualResult"
+             class="block mt-4 px-4 py-2.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-300 text-sm font-medium transition">
+            📸 點此查看「實際執行結果」的 SSMS 作業截圖 ↓
+          </a>
         `;
       }
     }
@@ -896,6 +1008,26 @@ EXEC sp_help '班級';`;
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
     }
+
+    // Lightbox controls for the actual result screenshot
+    function openLightbox(src, alt) {
+      const lb = document.getElementById('lightbox');
+      document.getElementById('lightboxImg').src = src;
+      document.getElementById('lightboxImg').alt = alt || '';
+      document.getElementById('lightboxCaption').textContent = alt || '';
+      lb.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('lightbox').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeLightbox();
+    });
 
     function renderAll() {
       renderStepper();
