@@ -1,0 +1,24 @@
+# 只納入本作業所需檔案：README.md、index.html、.gitignore、作業一/ch7_3_4.*
+*
+
+# 先取消忽略各目錄，才能往下比對檔案
+!*/
+!作業一/
+
+# 允許納入的檔案
+!.gitignore
+!README.md
+!index.html
+!作業一/ch7_3_4.html
+!作業一/ch7_3_4.md
+
+# 資料庫檔案與教材投影片一律不納入版控
+*.mdf
+*.ldf
+*.pdf
+*.sql
+
+# 系統雜檔
+.DS_Store
+Thumbs.db
+desktop.ini

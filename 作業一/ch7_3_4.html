@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ch7_3_4.sql 互動實戰教室 — FOREIGN KEY 外鍵綁定與排錯</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    .fk-line {
+      transition: stroke 0.35s ease, stroke-width 0.35s ease, opacity 0.35s ease;
+    }
+    .fk-line-active {
+      stroke-dasharray: 8 4;
+      animation: dashFlow 1.2s linear infinite;
+    }
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -24; }
+    }
+    .code-line {
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    .toast-enter {
+      animation: slideUp 0.25s ease forwards;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-indigo-500/40">
+
+  <!-- Top Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center font-mono font-bold text-white shadow-lg shadow-indigo-500/20">
+          FK
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">
+            Ch7_3_4.sql 外鍵關聯互動實戰教室
+          </h1>
+          <p class="text-xs sm:text-sm text-slate-400">
+            一步一步拆解 <span class="text-cyan-400 font-semibold">FOREIGN KEY</span> 綁定原理、排錯與 SSMS 新增查詢操作
+          </p>
+        </div>
+      </div>
+
+      <!-- Global Settings Bar -->
+      <div class="flex flex-wrap items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-2 text-xs">
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-400">資料庫：</span>
+          <input id="dbNameInput" type="text" value="教務系統"
+            class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-cyan-300 font-mono w-24 focus:outline-none focus:border-cyan-400" />
+        </div>
+        <div class="h-4 w-px bg-slate-700"></div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-400">文字型別：</span>
+          <select id="typeSelect"
+            class="bg-slate-900 border border-emerald-500/60 rounded px-2 py-1 text-emerald-300 font-mono focus:outline-none">
+            <option value="nvarchar" selected>nvarchar（實戰修正版）</option>
+            <option value="char">char / varchar（課本原版）</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Important Declaration Banner -->
+    <div class="rounded-2xl bg-gradient-to-r from-emerald-950/80 via-slate-900 to-cyan-950/60 border border-emerald-500/30 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex items-start gap-3">
+        <span class="text-xl mt-0.5">📌</span>
+        <div class="text-sm leading-relaxed">
+          <span class="font-bold text-emerald-300">實戰型別宣告：</span>
+          課本圖片寫的是 <code class="text-amber-300 bg-slate-800 px-1.5 py-0.5 rounded">char(4) / char(5) / varchar(8)</code>，但本次【教務系統】資料庫中【班級】及父表欄位皆為
+          <code class="text-emerald-300 bg-slate-800 px-1.5 py-0.5 rounded font-bold">nvarchar</code>。下方所有可複製的 SQL 指令已預設統一調整為 <code class="text-emerald-300">nvarchar</code>（亦可在右上角切換對照）。
+        </div>
+      </div>
+      <span class="shrink-0 text-xs font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-full">
+        SQL Server 2022 語法相容 ✓
+      </span>
+    </div>
+
+    <!-- Stepper Navigation -->
+    <nav class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="stepperNav">
+      <button onclick="goStep(1)" data-step="1" class="step-btn text-left p-3.5 rounded-xl border transition-all">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-md badge">STEP 1</span>
+          <span class="status-icon text-sm">⚠️</span>
+        </div>
+        <div class="font-bold text-sm">清理重複資料</div>
+        <div class="text-xs text-slate-400 mt-0.5">解決 S108 訊息 1505</div>
+      </button>
+
+      <button onclick="goStep(2)" data-step="2" class="step-btn text-left p-3.5 rounded-xl border transition-all">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-md badge">STEP 2</span>
+          <span class="status-icon text-sm">🔓</span>
+        </div>
+        <div class="font-bold text-sm">父表補上主鍵 PK</div>
+        <div class="text-xs text-slate-400 mt-0.5">解除無相符索引鍵報錯</div>
+      </button>
+
+      <button onclick="goStep(3)" data-step="3" class="step-btn text-left p-3.5 rounded-xl border transition-all">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-md badge">STEP 3</span>
+          <span class="status-icon text-sm">🔗</span>
+        </div>
+        <div class="font-bold text-sm">建立班級與外鍵 FK</div>
+        <div class="text-xs text-slate-400 mt-0.5">執行 Ch7_3_4 核心指令</div>
+      </button>
+
+      <button onclick="goStep(4)" data-step="4" class="step-btn text-left p-3.5 rounded-xl border transition-all">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-md badge">STEP 4</span>
+          <span class="status-icon text-sm">🧪</span>
+        </div>
+        <div class="font-bold text-sm">外鍵綁定互動測試</div>
+        <div class="text-xs text-slate-400 mt-0.5">模擬 INSERT 與驗證查詢</div>
+      </button>
+    </nav>
+
+    <!-- Main Split Layout: Left = Interactive SQL & Controls | Right = Live Visual ERD -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- Left Column: Step Guide & Copyable SQL -->
+      <section class="lg:col-span-6 space-y-4">
+        <div id="stepContentCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <!-- Populated dynamically by JS -->
+        </div>
+
+        <!-- Console Output Simulator -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
+          <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-mono">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <span class="text-slate-300 font-semibold">SSMS 訊息 (Messages) 模擬視窗</span>
+            </div>
+            <span class="text-[11px] text-slate-500">排錯請看此分頁，並按 Ctrl+Shift+R 刷新快取</span>
+          </div>
+          <div id="consoleOutput" class="p-4 font-mono text-xs leading-relaxed text-slate-300 min-h-[100px] max-h-48 overflow-y-auto space-y-1">
+            <div class="text-slate-500">-- 準備就緒。請依照步驟點擊「模擬執行」體驗資料庫狀態變化，或複製指令至 SSMS 執行。</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Visual Database Schema & Foreign Key Binding Diagram -->
+      <section class="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div>
+            <h2 class="font-bold text-base text-white flex items-center gap-2">
+              <span>🗺️</span> 視覺化資料表與 FOREIGN KEY 綁定狀態
+            </h2>
+            <p class="text-xs text-slate-400">滑鼠移到外鍵欄位或按鈕上，可高亮檢視對應的參照連線</p>
+          </div>
+          <button onclick="resetSimulation()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+            ↺ 重置模擬狀態
+          </button>
+        </div>
+
+        <!-- Diagram Container with SVG Overlay -->
+        <div id="diagramWrapper" class="relative py-2">
+          <svg id="erdSvg" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+
+          <!-- Top Row: 3 Parent Tables -->
+          <div class="grid grid-cols-3 gap-3 relative z-20 mb-14">
+            <!-- Parent 1: 學生 -->
+            <div id="card-student" class="rounded-xl bg-slate-950 border-2 border-slate-700 overflow-hidden transition-all">
+              <div class="bg-slate-800/90 px-3 py-2 flex items-center justify-between">
+                <span class="font-bold text-sm text-sky-300">學生</span>
+                <span id="badge-pk-student" class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono">無 PK</span>
+              </div>
+              <div class="p-2.5 text-xs space-y-1.5 font-mono">
+                <div id="anchor-student-pk" class="flex items-center justify-between px-2 py-1 rounded bg-slate-900 border border-slate-800">
+                  <span class="flex items-center gap-1">
+                    <span id="icon-pk-student">⚠️</span>
+                    <span class="font-bold text-white">學號</span>
+                  </span>
+                  <span class="type-label-4 text-[10px] text-emerald-400">nvarchar(4)</span>
+                </div>
+                <div class="text-[11px] text-slate-400 px-1 pt-1 space-y-0.5" id="rows-student">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Parent 2: 教授 -->
+            <div id="card-prof" class="rounded-xl bg-slate-950 border-2 border-slate-700 overflow-hidden transition-all">
+              <div class="bg-slate-800/90 px-3 py-2 flex items-center justify-between">
+                <span class="font-bold text-sm text-amber-300">教授</span>
+                <span id="badge-pk-prof" class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono">無 PK</span>
+              </div>
+              <div class="p-2.5 text-xs space-y-1.5 font-mono">
+                <div id="anchor-prof-pk" class="flex items-center justify-between px-2 py-1 rounded bg-slate-900 border border-slate-800">
+                  <span class="flex items-center gap-1">
+                    <span id="icon-pk-prof">🔓</span>
+                    <span class="font-bold text-white">教授編號</span>
+                  </span>
+                  <span class="type-label-4 text-[10px] text-emerald-400">nvarchar(4)</span>
+                </div>
+                <div class="text-[11px] text-slate-400 px-1 pt-1 space-y-0.5">
+                  <div>I001 - 陳教授</div>
+                  <div>I002 - 林教授</div>
+                  <div>I003 - 王教授</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Parent 3: 課程 -->
+            <div id="card-course" class="rounded-xl bg-slate-950 border-2 border-slate-700 overflow-hidden transition-all">
+              <div class="bg-slate-800/90 px-3 py-2 flex items-center justify-between">
+                <span class="font-bold text-sm text-fuchsia-300">課程</span>
+                <span id="badge-pk-course" class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono">無 PK</span>
+              </div>
+              <div class="p-2.5 text-xs space-y-1.5 font-mono">
+                <div id="anchor-course-pk" class="flex items-center justify-between px-2 py-1 rounded bg-slate-900 border border-slate-800">
+                  <span class="flex items-center gap-1">
+                    <span id="icon-pk-course">🔓</span>
+                    <span class="font-bold text-white">課程編號</span>
+                  </span>
+                  <span class="type-label-5 text-[10px] text-emerald-400">nvarchar(5)</span>
+                </div>
+                <div class="text-[11px] text-slate-400 px-1 pt-1 space-y-0.5">
+                  <div>CS101 - 資料庫</div>
+                  <div>CS203 - 程式設計</div>
+                  <div>CS305 - 網路概論</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Row: Child Table 班級 -->
+          <div class="relative z-20 max-w-md mx-auto">
+            <div id="card-class" class="rounded-xl bg-slate-950 border-2 border-dashed border-slate-700 overflow-hidden transition-all">
+              <div class="bg-slate-800/90 px-4 py-2.5 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-base text-cyan-300">班級</span>
+                  <span class="text-[11px] text-slate-400">(多對多關聯子表)</span>
+                </div>
+                <span id="badge-class-status" class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono">尚未重建</span>
+              </div>
+
+              <div class="p-3 font-mono text-xs space-y-1.5">
+                <!-- FK 1: 學號 -->
+                <div id="anchor-class-student" onmouseenter="highlightLink('student')" onmouseleave="highlightLink(null)"
+                  class="flex items-center justify-between px-2.5 py-1.5 rounded bg-slate-900 border border-slate-800 hover:border-sky-400 cursor-pointer transition">
+                  <span class="flex items-center gap-1.5">
+                    <span class="text-[10px] px-1 rounded bg-amber-500/20 text-amber-300">PK</span>
+                    <span class="text-[10px] px-1 rounded bg-sky-500/20 text-sky-300">FK1</span>
+                    <span class="font-bold text-white">學號</span>
+                  </span>
+                  <span class="text-slate-400"><span class="type-label-4 text-emerald-400">nvarchar(4)</span> NOT NULL</span>
+                </div>
+
+                <!-- FK 2: 教授編號 -->
+                <div id="anchor-class-prof" onmouseenter="highlightLink('prof')" onmouseleave="highlightLink(null)"
+                  class="flex items-center justify-between px-2.5 py-1.5 rounded bg-slate-900 border border-slate-800 hover:border-amber-400 cursor-pointer transition">
+                  <span class="flex items-center gap-1.5">
+                    <span class="text-[10px] px-1 rounded bg-amber-500/20 text-amber-300">PK</span>
+                    <span class="text-[10px] px-1 rounded bg-amber-500/20 text-amber-300">FK2</span>
+                    <span class="font-bold text-white">教授編號</span>
+                  </span>
+                  <span class="text-slate-400"><span class="type-label-4 text-emerald-400">nvarchar(4)</span> NOT NULL</span>
+                </div>
+
+                <!-- FK 3: 課程編號 -->
+                <div id="anchor-class-course" onmouseenter="highlightLink('course')" onmouseleave="highlightLink(null)"
+                  class="flex items-center justify-between px-2.5 py-1.5 rounded bg-slate-900 border border-slate-800 hover:border-fuchsia-400 cursor-pointer transition">
+                  <span class="flex items-center gap-1.5">
+                    <span class="text-[10px] px-1 rounded bg-amber-500/20 text-amber-300">PK</span>
+                    <span class="text-[10px] px-1 rounded bg-fuchsia-500/20 text-fuchsia-300">FK3</span>
+                    <span class="font-bold text-white">課程編號</span>
+                  </span>
+                  <span class="text-slate-400"><span class="type-label-5 text-emerald-400">nvarchar(5)</span> NOT NULL</span>
+                </div>
+
+                <!-- Normal Columns -->
+                <div class="flex items-center justify-between px-2.5 py-1 rounded bg-slate-900/50 text-slate-400">
+                  <span class="pl-12">上課時間</span>
+                  <span>datetime</span>
+                </div>
+                <div class="flex items-center justify-between px-2.5 py-1 rounded bg-slate-900/50 text-slate-400">
+                  <span class="pl-12">教室</span>
+                  <span class="type-label-8 text-emerald-400/80">nvarchar(8)</span>
+                </div>
+              </div>
+
+              <!-- Live Inserted Records Preview -->
+              <div id="classDataPreview" class="border-t border-slate-800 bg-slate-900/60 p-3 hidden">
+                <div class="text-[11px] font-bold text-cyan-300 mb-1.5">📋 目前【班級】資料內容（SELECT * FROM 班級）：</div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-[11px] font-mono text-left">
+                    <thead class="text-slate-400 border-b border-slate-700">
+                      <tr>
+                        <th class="py-1 pr-2">學號</th>
+                        <th class="py-1 pr-2">教授編號</th>
+                        <th class="py-1 pr-2">課程編號</th>
+                        <th class="py-1 pr-2">教室</th>
+                      </tr>
+                    </thead>
+                    <tbody id="classTableBody" class="divide-y divide-slate-800 text-slate-200">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+          <div class="flex items-center gap-3">
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-sky-400 inline-block"></span> 學號 → 學生</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-amber-400 inline-block"></span> 教授編號 → 教授</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-fuchsia-400 inline-block"></span> 課程編號 → 課程</span>
+          </div>
+          <span>複合主鍵：(學號, 教授編號, 課程編號)</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-2xl text-sm font-medium flex items-center gap-2">
+    <span>✅</span><span id="toastMsg">已複製到剪貼簿！</span>
+  </div>
+
+  <script>
+    // Application State
+    const state = {
+      step: 1,
+      dbName: '教務系統',
+      useNvarchar: true,
+      hasDuplicateS108: true,
+      hasParentPKs: false,
+      hasClassTable: false,
+      highlightedLink: null,
+      students: ['S101', 'S105', 'S108', 'S108'],
+      profs: ['I001', 'I002', 'I003'],
+      courses: ['CS101', 'CS203', 'CS305'],
+      classRows: []
+    };
+
+    // Helper: Get current column types
+    function getTypes() {
+      if (state.useNvarchar) {
+        return { t4: 'nvarchar(4)', t5: 'nvarchar(5)', t8: 'nvarchar(8)' };
+      }
+      return { t4: 'char(4)', t5: 'char(5)', t8: 'varchar(8)' };
+    }
+
+    // Generate SQL Snippets dynamically
+    function getSql(step) {
+      const db = state.dbName || '教務系統';
+      const { t4, t5, t8 } = getTypes();
+
+      if (step === 1) {
+        return `USE ${db};
+GO
+
+-- 1. 檢查三張父表是否有重複的主鍵編號
+SELECT '學生' AS 資料表, 學號 AS 重複編號, COUNT(*) AS 筆數
+FROM 學生 GROUP BY 學號 HAVING COUNT(*) > 1;
+GO
+
+-- 2. 安全去重：每個學號僅保留第 1 筆（移除多餘的 S108）
+WITH CTE AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY 學號 ORDER BY (SELECT NULL)) AS rn
+    FROM 學生
+)
+DELETE FROM CTE WHERE rn > 1;
+GO`;
+      }
+      if (step === 2) {
+        return `USE ${db};
+GO
+
+-- 確保父表參照欄位為 NOT NULL，並補上 PRIMARY KEY
+ALTER TABLE 學生 ALTER COLUMN 學號 ${t4} NOT NULL;
+ALTER TABLE 學生 ADD PRIMARY KEY (學號);
+
+ALTER TABLE 教授 ALTER COLUMN 教授編號 ${t4} NOT NULL;
+ALTER TABLE 教授 ADD PRIMARY KEY (教授編號);
+
+ALTER TABLE 課程 ALTER COLUMN 課程編號 ${t5} NOT NULL;
+ALTER TABLE 課程 ADD PRIMARY KEY (課程編號);
+GO`;
+      }
+      if (step === 3) {
+        return `USE ${db};
+GO
+
+-- 防呆：若舊的【班級】表仍存在則先刪除
+IF OBJECT_ID(N'dbo.班級', N'U') IS NOT NULL
+    DROP TABLE dbo.班級;
+GO
+
+-- Ch7_3_4.sql 核心建表與 FOREIGN KEY 綁定指令
+CREATE TABLE 班級 (
+    教授編號 ${t4} NOT NULL,
+    課程編號 ${t5} NOT NULL,
+    學號     ${t4} NOT NULL
+             REFERENCES 學生 (學號),
+    上課時間 datetime,
+    教室     ${t8},
+    PRIMARY KEY (學號, 教授編號, 課程編號),
+    FOREIGN KEY (教授編號) REFERENCES 教授 (教授編號),
+    FOREIGN KEY (課程編號) REFERENCES 課程 (課程編號)
+);
+GO`;
+      }
+      if (step === 4) {
+        return `USE ${db};
+GO
+
+-- (A) 呈現資料表欄位與資料
+SELECT * FROM 班級;
+
+-- (B) 檢視主鍵與 3 組 FOREIGN KEY 結構證明
+EXEC sp_help '班級';`;
+      }
+      return '';
+    }
+
+    // Console logger
+    function logConsole(msg, type = 'info') {
+      const box = document.getElementById('consoleOutput');
+      const div = document.createElement('div');
+      const time = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+      const colorMap = {
+        info: 'text-slate-300',
+        success: 'text-emerald-400',
+        error: 'text-rose-400',
+        warn: 'text-amber-300'
+      };
+      div.className = colorMap[type] || 'text-slate-300';
+      div.textContent = `[${time}] ${msg}`;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    // Copy helper
+    function copySql(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('已複製 SQL 指令！請貼到 SSMS「新增查詢」按 F5 執行');
+      });
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      document.getElementById('toastMsg').textContent = msg;
+      t.classList.remove('hidden');
+      t.classList.add('toast-enter');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        t.classList.add('hidden');
+      }, 2600);
+    }
+
+    // Step Actions (Simulations)
+    function simStep1Dedupe() {
+      if (!state.hasDuplicateS108) {
+        logConsole('查詢結果：0 筆重複資料，父表已經是乾淨狀態。', 'info');
+        return;
+      }
+      state.hasDuplicateS108 = false;
+      state.students = ['S101', 'S105', 'S108'];
+      logConsole('(1 個資料列受到影響) — 已成功移除重複的 S108，現在學號 100% 唯一！', 'success');
+      renderAll();
+    }
+
+    function simStep2AddPK() {
+      if (state.hasDuplicateS108) {
+        logConsole('訊息 1505，層級 16：CREATE UNIQUE INDEX 陳述式終止，因為發現重複索引鍵值 (S108)！請先完成 STEP 1 去重。', 'error');
+        return;
+      }
+      state.hasParentPKs = true;
+      logConsole('命令已順利完成。已為【學生】、【教授】、【課程】三張父表建立 PRIMARY KEY！', 'success');
+      renderAll();
+    }
+
+    function simStep3CreateClass() {
+      if (!state.hasParentPKs) {
+        logConsole('訊息 1776：參考資料表「學生 / 教授 / 課程」中沒有與外部索引鍵相符的主要或候選索引鍵！請先完成 STEP 2。', 'error');
+        return;
+      }
+      state.hasClassTable = true;
+      logConsole('命令已順利完成。已建立【班級】資料表，並成功綁定 3 組 FOREIGN KEY 關聯！', 'success');
+      renderAll();
+    }
+
+    function simInsertClass() {
+      if (!state.hasClassTable) {
+        logConsole('錯誤：尚未建立【班級】資料表，請先完成 STEP 3！', 'error');
+        return;
+      }
+      const sId = document.getElementById('testStudent').value.trim();
+      const pId = document.getElementById('testProf').value.trim();
+      const cId = document.getElementById('testCourse').value.trim();
+      const room = document.getElementById('testRoom').value.trim() || 'E201';
+
+      // Validate FKs
+      if (!state.students.includes(sId)) {
+        highlightLink('student');
+        logConsole(`訊息 547，層級 16：INSERT 陳述式與 FOREIGN KEY 條件約束 "FK__班級__學號" 衝突！在父表「學生」中找不到學號 (${sId})。`, 'error');
+        return;
+      }
+      if (!state.profs.includes(pId)) {
+        highlightLink('prof');
+        logConsole(`訊息 547，層級 16：INSERT 陳述式與 FOREIGN KEY 條件約束 "FK__班級__教授編號" 衝突！在父表「教授」中找不到教授編號 (${pId})。`, 'error');
+        return;
+      }
+      if (!state.courses.includes(cId)) {
+        highlightLink('course');
+        logConsole(`訊息 547，層級 16：INSERT 陳述式與 FOREIGN KEY 條件約束 "FK__班級__課程編號" 衝突！在父表「課程」中找不到課程編號 (${cId})。`, 'error');
+        return;
+      }
+
+      // Validate Composite PK
+      const exists = state.classRows.some(r => r.sId === sId && r.pId === pId && r.cId === cId);
+      if (exists) {
+        logConsole(`訊息 2627：違反 PRIMARY KEY 條件約束！組合 (${sId}, ${pId}, ${cId}) 已經存在於【班級】資料表中。`, 'error');
+        return;
+      }
+
+      state.classRows.push({ sId, pId, cId, room });
+      highlightLink(null);
+      logConsole(`(1 個資料列受到影響) — 成功寫入 (${sId}, ${pId}, ${cId}, '${room}')！三組 FOREIGN KEY 驗證全數通過。`, 'success');
+      renderAll();
+    }
+
+    function resetSimulation() {
+      state.hasDuplicateS108 = true;
+      state.hasParentPKs = false;
+      state.hasClassTable = false;
+      state.students = ['S101', 'S105', 'S108', 'S108'];
+      state.classRows = [];
+      state.step = 1;
+      document.getElementById('consoleOutput').innerHTML =
+        '<div class="text-slate-500">-- 已重置模擬環境。請從 STEP 1 開始重新體驗。</div>';
+      renderAll();
+    }
+
+    function goStep(n) {
+      state.step = n;
+      renderAll();
+    }
+
+    function highlightLink(target) {
+      state.highlightedLink = target;
+      drawConnections();
+    }
+
+    // Render Step Panel
+    function renderStepPanel() {
+      const card = document.getElementById('stepContentCard');
+      const sql = getSql(state.step);
+
+      if (state.step === 1) {
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono uppercase tracking-wider text-rose-400 font-bold">Step 1 / 4 — 排除重複鍵值</span>
+            <span class="text-xs px-2 py-0.5 rounded-full ${state.hasDuplicateS108 ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}">
+              ${state.hasDuplicateS108 ? '偵測到重複 S108' : '重複資料已清理 ✓'}
+            </span>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">為什麼加主鍵時會出現「訊息 1505」？</h3>
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            <code class="text-amber-300">PRIMARY KEY</code> 要求欄位值 100% 唯一。你的【學生】表內有兩筆 <code class="text-rose-300 font-bold">S108</code>，直接下達加主鍵指令會被 SQL Server 拒絕。使用 <code class="text-cyan-300">ROW_NUMBER()</code> 可以安全保留 1 筆、刪掉多餘重複列。
+          </p>
+          <div class="relative rounded-xl bg-slate-950 border border-slate-800 overflow-hidden mb-4">
+            <div class="flex items-center justify-between px-3 py-2 bg-slate-800/70 border-b border-slate-800 text-xs">
+              <span class="font-mono text-slate-300">Step1_Deduplicate.sql</span>
+              <button onclick="copySql(getSql(1))" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition">📋 複製指令</button>
+            </div>
+            <pre class="p-3.5 text-xs text-cyan-200 overflow-x-auto leading-relaxed"><code>${escapeHtml(sql)}</code></pre>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button onclick="simStep1Dedupe()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-600/20 transition">
+              ▶ 模擬執行：移除重複 S108
+            </button>
+            <button onclick="goStep(2)" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium transition">
+              下一步：父表加主鍵 →
+            </button>
+          </div>
+        `;
+      } else if (state.step === 2) {
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">Step 2 / 4 — 建立父表主鍵</span>
+            <span class="text-xs px-2 py-0.5 rounded-full ${state.hasParentPKs ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">
+              ${state.hasParentPKs ? '三張父表皆已設 PK ✓' : '父表尚未設定 PK'}
+            </span>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">外鍵鐵律：父表必須先有 PRIMARY KEY</h3>
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            SQL Server 規定子表的 <code class="text-cyan-300">FOREIGN KEY</code> 只能參照父表的 <code class="text-amber-300">PRIMARY KEY</code> 或 <code class="text-amber-300">UNIQUE</code> 欄位，且型別必須完全一致（皆為 <code class="text-emerald-300 font-bold">${state.useNvarchar ? 'nvarchar' : 'char'}</code>）。
+          </p>
+          <div class="relative rounded-xl bg-slate-950 border border-slate-800 overflow-hidden mb-4">
+            <div class="flex items-center justify-between px-3 py-2 bg-slate-800/70 border-b border-slate-800 text-xs">
+              <span class="font-mono text-slate-300">Step2_AddParentPK.sql</span>
+              <button onclick="copySql(getSql(2))" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition">📋 複製指令</button>
+            </div>
+            <pre class="p-3.5 text-xs text-amber-200 overflow-x-auto leading-relaxed"><code>${escapeHtml(sql)}</code></pre>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button onclick="simStep2AddPK()" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold shadow-lg shadow-amber-600/20 transition">
+              🔑 模擬執行：為三張父表加上主鍵
+            </button>
+            <button onclick="goStep(3)" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium transition">
+              下一步：建立班級表 →
+            </button>
+          </div>
+        `;
+      } else if (state.step === 3) {
+        const { t4, t5, t8 } = getTypes();
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono uppercase tracking-wider text-cyan-400 font-bold">Step 3 / 4 — Ch7_3_4.sql 核心建表</span>
+            <span class="text-xs px-2 py-0.5 rounded-full ${state.hasClassTable ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700 text-slate-300'}">
+              ${state.hasClassTable ? '班級表與外鍵已綁定 ✓' : '等待建表'}
+            </span>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">建立【班級】與 3 組 FOREIGN KEY 綁定</h3>
+          <p class="text-sm text-slate-300 leading-relaxed mb-3">
+            將滑鼠移到下方<span class="text-sky-300 font-semibold">彩色外鍵語法</span>上，右側關聯圖會即時點亮對應的連線！這裡同時示範了「行內式（REFERENCES）」與「表層式（FOREIGN KEY）」兩種標準寫法。
+          </p>
+
+          <!-- Interactive Highlightable SQL Block -->
+          <div class="relative rounded-xl bg-slate-950 border border-slate-800 overflow-hidden mb-4">
+            <div class="flex items-center justify-between px-3 py-2 bg-slate-800/70 border-b border-slate-800 text-xs">
+              <span class="font-mono text-slate-300">Ch7_3_4_CreateClass.sql</span>
+              <button onclick="copySql(getSql(3))" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition">📋 複製完整指令</button>
+            </div>
+            <div class="p-3.5 font-mono text-xs leading-relaxed overflow-x-auto space-y-0.5">
+              <div class="text-slate-400">USE ${escapeHtml(state.dbName)}; GO</div>
+              <div class="text-slate-500">IF OBJECT_ID(N'dbo.班級', N'U') IS NOT NULL DROP TABLE dbo.班級; GO</div>
+              <div class="text-indigo-300 font-bold mt-1">CREATE TABLE 班級 (</div>
+              <div class="pl-4 text-slate-200">教授編號 <span class="text-emerald-400">${t4}</span> NOT NULL,</div>
+              <div class="pl-4 text-slate-200">課程編號 <span class="text-emerald-400">${t5}</span> NOT NULL,</div>
+              <div onmouseenter="highlightLink('student')" onmouseleave="highlightLink(null)"
+                class="pl-4 py-0.5 rounded bg-sky-500/15 border-l-2 border-sky-400 text-sky-200 cursor-pointer hover:bg-sky-500/25">
+                學號 <span class="text-emerald-400">${t4}</span> NOT NULL <span class="font-bold text-sky-300">REFERENCES 學生 (學號)</span>,
+              </div>
+              <div class="pl-4 text-slate-400">上課時間 datetime,</div>
+              <div class="pl-4 text-slate-400">教室 <span class="text-emerald-400">${t8}</span>,</div>
+              <div class="pl-4 text-amber-200">PRIMARY KEY (學號, 教授編號, 課程編號),</div>
+              <div onmouseenter="highlightLink('prof')" onmouseleave="highlightLink(null)"
+                class="pl-4 py-0.5 rounded bg-amber-500/15 border-l-2 border-amber-400 text-amber-200 cursor-pointer hover:bg-amber-500/25">
+                <span class="font-bold text-amber-300">FOREIGN KEY (教授編號) REFERENCES 教授 (教授編號)</span>,
+              </div>
+              <div onmouseenter="highlightLink('course')" onmouseleave="highlightLink(null)"
+                class="pl-4 py-0.5 rounded bg-fuchsia-500/15 border-l-2 border-fuchsia-400 text-fuchsia-200 cursor-pointer hover:bg-fuchsia-500/25">
+                <span class="font-bold text-fuchsia-300">FOREIGN KEY (課程編號) REFERENCES 課程 (課程編號)</span>
+              </div>
+              <div class="text-indigo-300 font-bold">);</div>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <button onclick="simStep3CreateClass()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold shadow-lg shadow-cyan-600/20 transition">
+              🔗 模擬執行：建表並綁定外鍵
+            </button>
+            <button onclick="goStep(4)" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium transition">
+              下一步：測試外鍵保護機制 →
+            </button>
+          </div>
+        `;
+      } else {
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">Step 4 / 4 — 體驗外鍵約束與呈現結果</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">互動沙盒</span>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">試試看：如果塞入「不存在的編號」會怎樣？</h3>
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            這就是設定 <code class="text-cyan-300">FOREIGN KEY</code> 的真正價值！試著選一組正常資料寫入，再故意把學號改成不存在的 <code class="text-rose-300">S999</code>，觀察 SQL Server 如何攔截髒資料。
+          </p>
+
+          <!-- Interactive INSERT Tester -->
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-4 space-y-3">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div>
+                <label class="block text-sky-300 font-mono mb-1">學號 (FK1)</label>
+                <input id="testStudent" type="text" value="S108" list="studentOptions"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white focus:border-sky-400 focus:outline-none" />
+                <datalist id="studentOptions">
+                  <option value="S101"></option><option value="S105"></option><option value="S108"></option><option value="S999 (非法測試)"></option>
+                </datalist>
+              </div>
+              <div>
+                <label class="block text-amber-300 font-mono mb-1">教授編號 (FK2)</label>
+                <input id="testProf" type="text" value="I001"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white focus:border-amber-400 focus:outline-none" />
+              </div>
+              <div>
+                <label class="block text-fuchsia-300 font-mono mb-1">課程編號 (FK3)</label>
+                <input id="testCourse" type="text" value="CS101"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white focus:border-fuchsia-400 focus:outline-none" />
+              </div>
+              <div>
+                <label class="block text-slate-400 font-mono mb-1">教室</label>
+                <input id="testRoom" type="text" value="E201"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white focus:border-slate-500 focus:outline-none" />
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="simInsertClass()" class="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition">
+                ➕ 模擬 INSERT 寫入班級表
+              </button>
+              <button onclick="document.getElementById('testStudent').value='S999'; simInsertClass();"
+                class="px-3.5 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white text-xs font-bold transition">
+                💥 故意填入不存在的 S999 測試阻擋
+              </button>
+            </div>
+          </div>
+
+          <!-- Verification SQL -->
+          <div class="relative rounded-xl bg-slate-950 border border-slate-800 overflow-hidden">
+            <div class="flex items-center justify-between px-3 py-2 bg-slate-800/70 border-b border-slate-800 text-xs">
+              <span class="font-mono text-slate-300">Step4_VerifyAndShow.sql（作業截圖用）</span>
+              <button onclick="copySql(getSql(4))" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition">📋 複製驗證指令</button>
+            </div>
+            <pre class="p-3.5 text-xs text-emerald-200 overflow-x-auto leading-relaxed"><code>${escapeHtml(sql)}</code></pre>
+          </div>
+        `;
+      }
+    }
+
+    // Render Stepper Nav
+    function renderStepper() {
+      document.querySelectorAll('.step-btn').forEach(btn => {
+        const s = Number(btn.dataset.step);
+        const isActive = s === state.step;
+        btn.className = `step-btn text-left p-3.5 rounded-xl border transition-all ${
+          isActive
+            ? 'bg-indigo-600/20 border-indigo-400 shadow-lg shadow-indigo-500/10'
+            : 'bg-slate-900 border-slate-800 hover:border-slate-600'
+        }`;
+        const badge = btn.querySelector('.badge');
+        badge.className = `text-xs font-mono font-bold px-2 py-0.5 rounded-md badge ${
+          isActive ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
+        }`;
+
+        const icon = btn.querySelector('.status-icon');
+        if (s === 1) icon.textContent = state.hasDuplicateS108 ? '⚠️' : '✅';
+        if (s === 2) icon.textContent = state.hasParentPKs ? '🔑' : '🔓';
+        if (s === 3) icon.textContent = state.hasClassTable ? '✅' : '🔗';
+        if (s === 4) icon.textContent = '🧪';
+      });
+    }
+
+    // Render Visual ERD Cards
+    function renderDiagramCards() {
+      const { t4, t5, t8 } = getTypes();
+      document.querySelectorAll('.type-label-4').forEach(el => el.textContent = t4);
+      document.querySelectorAll('.type-label-5').forEach(el => el.textContent = t5);
+      document.querySelectorAll('.type-label-8').forEach(el => el.textContent = t8);
+
+      // Student Rows
+      const rowsStudent = document.getElementById('rows-student');
+      rowsStudent.innerHTML = state.students.map((id, idx) => {
+        const isDup = state.hasDuplicateS108 && id === 'S108' && idx === 3;
+        return `<div class="${isDup ? 'text-rose-400 font-bold bg-rose-500/15 px-1 rounded' : ''}">
+          ${id} - ${id === 'S101' ? '林小明' : id === 'S105' ? '張小華' : '王大同'}${isDup ? ' (重複!)' : ''}
+        </div>`;
+      }).join('');
+
+      // Parent PK Badges
+      const pkConfigs = [
+        { id: 'student', card: 'card-student', border: 'border-sky-500/70' },
+        { id: 'prof', card: 'card-prof', border: 'border-amber-500/70' },
+        { id: 'course', card: 'card-course', border: 'border-fuchsia-500/70' }
+      ];
+      pkConfigs.forEach(cfg => {
+        const badge = document.getElementById(`badge-pk-${cfg.id}`);
+        const icon = document.getElementById(`icon-pk-${cfg.id}`);
+        const card = document.getElementById(cfg.card);
+        if (state.hasParentPKs) {
+          badge.textContent = 'PK ✓';
+          badge.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono';
+          icon.textContent = '🔑';
+          card.className = `rounded-xl bg-slate-950 border-2 ${cfg.border} overflow-hidden transition-all`;
+        } else {
+          badge.textContent = '無 PK';
+          badge.className = 'text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono';
+          icon.textContent = (cfg.id === 'student' && state.hasDuplicateS108) ? '⚠️' : '🔓';
+          card.className = 'rounded-xl bg-slate-950 border-2 border-slate-700 overflow-hidden transition-all';
+        }
+      });
+
+      // Child Table Card
+      const classCard = document.getElementById('card-class');
+      const classBadge = document.getElementById('badge-class-status');
+      if (state.hasClassTable) {
+        classCard.className = 'rounded-xl bg-slate-950 border-2 border-cyan-500/80 overflow-hidden transition-all shadow-lg shadow-cyan-500/10';
+        classBadge.textContent = '已建立 & 外鍵綁定 ✓';
+        classBadge.className = 'text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono';
+      } else {
+        classCard.className = 'rounded-xl bg-slate-950 border-2 border-dashed border-slate-700 overflow-hidden transition-all opacity-80';
+        classBadge.textContent = '尚未重建';
+        classBadge.className = 'text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono';
+      }
+
+      // Inserted rows preview
+      const preview = document.getElementById('classDataPreview');
+      const tbody = document.getElementById('classTableBody');
+      if (state.classRows.length > 0) {
+        preview.classList.remove('hidden');
+        tbody.innerHTML = state.classRows.map(r => `
+          <tr>
+            <td class="py-1 pr-2 text-sky-300">${escapeHtml(r.sId)}</td>
+            <td class="py-1 pr-2 text-amber-300">${escapeHtml(r.pId)}</td>
+            <td class="py-1 pr-2 text-fuchsia-300">${escapeHtml(r.cId)}</td>
+            <td class="py-1 pr-2 text-slate-300">${escapeHtml(r.room)}</td>
+          </tr>
+        `).join('');
+      } else {
+        preview.classList.add('hidden');
+      }
+    }
+
+    // Draw SVG Connectors between Child (班級) and 3 Parents
+    function drawConnections() {
+      const svg = document.getElementById('erdSvg');
+      const wrapper = document.getElementById('diagramWrapper');
+      const wRect = wrapper.getBoundingClientRect();
+      svg.setAttribute('viewBox', `0 0 ${wRect.width} ${wRect.height}`);
+
+      const links = [
+        { key: 'student', from: 'anchor-class-student', to: 'card-student', color: '#38bdf8' },
+        { key: 'prof',    from: 'anchor-class-prof',    to: 'card-prof',    color: '#fbbf24' },
+        { key: 'course',  from: 'anchor-class-course',  to: 'card-course',  color: '#e879f9' }
+      ];
+
+      let pathsHtml = '';
+      links.forEach((lk, idx) => {
+        const fromEl = document.getElementById(lk.from);
+        const toEl = document.getElementById(lk.to);
+        if (!fromEl || !toEl) return;
+
+        const fRect = fromEl.getBoundingClientRect();
+        const tRect = toEl.getBoundingClientRect();
+
+        // Start from top edge of child card area or sides for cleaner visual routing
+        const startX = (idx === 0)
+          ? (fRect.left - wRect.left)
+          : (idx === 2)
+            ? (fRect.right - wRect.left)
+            : (fRect.left + fRect.width / 2 - wRect.left);
+        const startY = fRect.top + fRect.height / 2 - wRect.top;
+
+        const endX = tRect.left + tRect.width / 2 - wRect.left;
+        const endY = tRect.bottom - wRect.top;
+
+        // Smooth cubic bezier
+        const midY = (startY + endY) / 2;
+        const c1x = idx === 0 ? startX - 45 : idx === 2 ? startX + 45 : startX;
+        const c1y = idx === 1 ? midY : startY - 20;
+        const c2x = endX;
+        const c2y = endY + 35;
+
+        const isHighlighted = state.highlightedLink === lk.key;
+        const isBound = state.hasClassTable;
+        const opacity = !isBound
+          ? (isHighlighted ? 0.85 : 0.2)
+          : (state.highlightedLink && !isHighlighted ? 0.25 : 0.95);
+        const strokeWidth = isHighlighted ? 3.5 : (isBound ? 2.5 : 1.5);
+        const dashClass = (isBound || isHighlighted) ? 'fk-line fk-line-active' : 'fk-line';
+
+        pathsHtml += `
+          <path d="M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}"
+            fill="none"
+            stroke="${lk.color}"
+            stroke-width="${strokeWidth}"
+            opacity="${opacity}"
+            class="${dashClass}" />
+          <circle cx="${endX}" cy="${endY}" r="${isHighlighted ? 5 : 4}" fill="${lk.color}" opacity="${opacity}" />
+          <circle cx="${startX}" cy="${startY}" r="${isHighlighted ? 5 : 3.5}" fill="${lk.color}" opacity="${opacity}" />
+        `;
+      });
+
+      svg.innerHTML = pathsHtml;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function renderAll() {
+      renderStepper();
+      renderStepPanel();
+      renderDiagramCards();
+      requestAnimationFrame(drawConnections);
+    }
+
+    // Event Listeners for Settings
+    document.getElementById('dbNameInput').addEventListener('input', (e) => {
+      state.dbName = e.target.value.trim() || '教務系統';
+      renderStepPanel();
+    });
+    document.getElementById('typeSelect').addEventListener('change', (e) => {
+      state.useNvarchar = (e.target.value === 'nvarchar');
+      renderAll();
+      showToast(`已切換所有 SQL 指令為 ${state.useNvarchar ? 'nvarchar（實戰版）' : 'char/varchar（課本版）'}`);
+    });
+    window.addEventListener('resize', drawConnections);
+
+    // Initial Render
+    renderAll();
+  </script>
+</body>
+</html>
